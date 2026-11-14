@@ -54,8 +54,9 @@ claude plugin uninstall progress; claude plugin uninstall aiblueprint
 - **History**: finished actions stay visible; each new request starts from an empty panel.
 - **Plan**: Claude's plan at the top (○ to do, ● in progress, ✓ done).
 - **Files touched**: every file edited during the conversation, with +/− lines. Clicking a name opens the file in **its own editor window**:
-  - **Content** tab: numbered file, lines changed by Claude in green;
-  - **Changes** tab: each edit with its real line number, removed lines in red, added in green;
+  - **Changes** tab (opens first): jumps straight to the changed areas, removed lines in red right above the added lines in green, 3 lines of context around, the rest folded as "⋯ N lines";
+  - **Whole file** tab: the full numbered file with the same red and green lines;
+  - **History** tab: each edit in order, with its real line number;
   - **Direct editing**: ✎ Edit, then ✓ Confirm writes the file, ✕ Cancel changes nothing. If the file changed on disk meanwhile, nothing is overwritten (not on mobile);
   - if the app refuses separate windows, files open as tabs inside Radar.
 - **Guard** (on/off in ⚙): before a risky command (`rm -rf`, `Remove-Item -Recurse`, `rmdir /s`, `git push --force`, `git reset --hard`, `git clean -f`, `git branch -D`) a dialog asks Allow or Deny. Wiping or formatting a drive is always denied. Only real commands count, not text that mentions them.
@@ -74,7 +75,7 @@ claude plugin uninstall progress; claude plugin uninstall aiblueprint
 
 On by default; the ☑ box on the Context card and ⚙ in Radar turn it on or off (same setting). On every request it adds to the system prompt:
 
-- **caveman** rules: answer first, no pleasantries or recap, short sentences, code and errors verbatim;
+- **caveman** rules: answer first, no pleasantries or recap, short sentences, code and errors verbatim, and a hard length budget (final answer about 6 short lines unless you ask for detail);
 - **ponytail** rules: smallest complete change, reuse what exists, nothing unrequested;
 - **your skills, sorted by category** (Games, Code, Web & design, Video…), with a rule: only for real work they match, the 1–2 most specific. New skills are picked up within 10 minutes.
 

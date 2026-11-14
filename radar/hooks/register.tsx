@@ -148,17 +148,46 @@ export function paneId(path: string) {
 }
 const MAX_LINES = 1500 // au-delà, le panneau deviendrait lourd
 
-// Numéros (base 0) des lignes du fichier qui viennent des changements de Claude.
-export function changedLines(content: string, changes: FileChange[]): Set<number> {
-  const out = new Set<number>()
-  const total = content.split('\n').length
+export type Row = { kind: 'ctx' | 'add' | 'del' | 'gap'; num?: number; text: string }
+
+// Vue du fichier avec les lignes retirées (rouge) juste avant les ajoutées (vert), à leur vraie place.
+// Les lignes identiques en début et fin de chaque modif ne comptent pas comme changées.
+// full = false : seulement les zones changées, avec `ctx` lignes autour, le reste replié en « ⋯ N lignes ».
+export function inlineRows(content: string, changes: FileChange[], full = false, ctx = 3): Row[] {
+  const lines = content.split('\n')
+  const added = new Set<number>()
+  const removed = new Map<number, string[]>() // index de ligne → lignes retirées affichées juste avant
   for (const c of changes) {
-    if (c.whole) { for (let i = 0; i < total; i++) out.add(i); continue }
+    if (c.whole) { lines.forEach((_, i) => added.add(i)); continue }
     const at = c.new ? content.indexOf(c.new) : -1
-    if (at < 0) continue // texte déjà remplacé par une modif plus récente
+    if (at < 0) continue // texte déjà remplacé par une modif plus récente (reste visible dans Historique)
     const start = content.slice(0, at).split('\n').length - 1
-    c.new.split('\n').forEach((_, i) => out.add(start + i))
+    const o = c.old.split('\n'), n = c.new.split('\n')
+    let p = 0
+    while (p < o.length && p < n.length && o[p] === n[p]) p++
+    let s = 0
+    while (s < o.length - p && s < n.length - p && o[o.length - 1 - s] === n[n.length - 1 - s]) s++
+    n.slice(p, n.length - s).forEach((_, i) => added.add(start + p + i))
+    const del = o.slice(p, o.length - s)
+    if (del.length) removed.set(start + p, [...(removed.get(start + p) ?? []), ...del])
   }
+  const rows: Row[] = []
+  for (let i = 0; i <= lines.length; i++) {
+    for (const t of removed.get(i) ?? []) rows.push({ kind: 'del', text: t })
+    if (i < lines.length) rows.push({ kind: added.has(i) ? 'add' : 'ctx', num: i + 1, text: lines[i]! })
+  }
+  if (full) return rows
+  const keep = rows.map(() => false)
+  rows.forEach((r, i) => { if (r.kind !== 'ctx') for (let j = Math.max(0, i - ctx); j <= Math.min(rows.length - 1, i + ctx); j++) keep[j] = true })
+  const out: Row[] = []
+  let hidden = 0
+  rows.forEach((r, i) => {
+    if (!keep[i]) { hidden++; return }
+    if (hidden) out.push({ kind: 'gap', text: `⋯ ${hidden} ligne${hidden > 1 ? 's' : ''}` })
+    hidden = 0
+    out.push(r)
+  })
+  if (hidden && out.length) out.push({ kind: 'gap', text: `⋯ ${hidden} ligne${hidden > 1 ? 's' : ''}` })
   return out
 }
 
@@ -258,7 +287,7 @@ async function editorBody($: EngineInterface, e: RenderInput<'Pane'>, paneReq?: 
       </Box>
       <Text size="footnote" dimColor mono wrap="truncate-middle">{f.path}</Text>
       <Box flexDirection="row" gap="sm" alignItems="center" flexWrap="wrap">
-        {tab('code', 'Contenu')}{tab('diff', 'Changements')}
+        {tab('code', 'Modifs')}{tab('full', 'Fichier entier')}{tab('diff', 'Historique')}
         {Input && !draft && <Button key="edit" label="✎ Modifier" variant="secondary" onPress={() => { setTab('code'); void startEdit($, f.path) }} />}
         {draft && <Button key="edit-ok" label="✓ Confirmer" variant="primary" onPress={() => void confirmEdit($, f.path).catch(() => {})} />}
         {draft && <Button key="edit-cancel" label="✕ Annuler" plain dimColor onPress={() => void stopEdit($, f.path)} />}
@@ -306,17 +335,24 @@ async function editorBody($: EngineInterface, e: RenderInput<'Pane'>, paneReq?: 
 
   const content = await $.fs.read(f.path).catch(() => undefined)
   if (typeof content !== 'string') return <Box flexDirection="column" gap="sm">{header}<Text color={RED}>Fichier introuvable ou illisible (supprimé ou déplacé ?).</Text></Box>
-  const lines = content.split('\n')
-  const marked = changedLines(content, f.changes)
-  const width = String(Math.min(lines.length, MAX_LINES)).length
+  const total = content.split('\n').length
+  const isFull = current === 'full'
+  const rows = inlineRows(content, f.changes, isFull)
+  const zones = rows.filter((r, i) => r.kind !== 'gap' && (i === 0 || rows[i - 1]!.kind === 'gap')).length
+  const width = String(Math.min(total, MAX_LINES)).length
+  const legend = [<Text key="la" color={CHECK}>▌+</Text>, ' ajouté · ', <Text key="lr" color={RED}>▌−</Text>, ' retiré']
   return (
     <Box flexDirection="column" gap="sm">
       {header}
-      <Text size="footnote" dimColor>{lines.length} lignes · <Text color={CHECK}>▌</Text> lignes changées par Claude</Text>
+      {rows.some(r => r.kind === 'add' || r.kind === 'del')
+        ? <Text size="footnote" dimColor>{isFull ? `${total} lignes` : `${zones} zone${zones > 1 ? 's' : ''} modifiée${zones > 1 ? 's' : ''} sur ${total} lignes`} · {legend}</Text>
+        : <Text size="footnote" dimColor>Les lignes de Claude ont été remplacées depuis : voir Historique.</Text>}
       <Box flexDirection="column" gap={0}>
-        {lines.slice(0, MAX_LINES).map((l, i) => codeLine('l' + i, String(i + 1).padStart(width), l, marked.has(i) ? ADD_BG : undefined, marked.has(i) ? '+' : ' '))}
+        {rows.slice(0, MAX_LINES).map((r, i) => r.kind === 'gap'
+          ? <Text key={'g' + i} mono size="footnote" dimColor>{' '.repeat(width)}   {r.text}</Text>
+          : codeLine('r' + i, r.num ? String(r.num).padStart(width) : ' '.repeat(width), r.text, r.kind === 'add' ? ADD_BG : r.kind === 'del' ? DEL_BG : undefined, r.kind === 'add' ? '+' : r.kind === 'del' ? '−' : ' '))}
       </Box>
-      {lines.length > MAX_LINES && <Text dimColor>… {lines.length - MAX_LINES} lignes de plus, ouvre le fichier dans ton éditeur pour la suite.</Text>}
+      {rows.length > MAX_LINES && <Text dimColor>… {rows.length - MAX_LINES} lignes de plus, ouvre le fichier dans ton éditeur pour la suite.</Text>}
     </Box>
   )
 }

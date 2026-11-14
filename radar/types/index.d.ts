@@ -22,10 +22,10 @@ export type FileChange = { old: string; new: string; whole?: boolean }
 export type FileTouch = { path: string; added: number; removed: number; edits: number; last: string[]; changes: FileChange[]; written?: boolean }
 
 // L'éditeur dans Radar : fichiers ouverts en onglets (open), celui affiché (path) et sa vue.
-export type FileView = { path: string; tab: 'code' | 'diff'; inline?: boolean; open: string[] }
+export type FileView = { path: string; tab: 'code' | 'full' | 'diff'; inline?: boolean; open: string[] }
 
 // Une fenêtre à part : son id de panneau, son fichier, sa vue.
-export type PoppedFile = { id: string; path: string; tab: 'code' | 'diff' }
+export type PoppedFile = { id: string; path: string; tab: 'code' | 'full' | 'diff' }
 
 // Une modification en cours dans l'éditeur : texte tapé, texte du fichier au départ, erreur à l'écriture.
 export type EditDraft = { path: string; draft: string; original: string; error?: string }

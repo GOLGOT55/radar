@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { guardCheck } from '../hooks/register.js'
+import { guardCheck, inlineRows } from '../hooks/register.js'
 
 const PANE = {
   plugin: 'radar',
@@ -512,4 +512,16 @@ test('éditeur : ✎ Modifier, taper, ✓ Confirmer écrit le fichier ; ✕ Annu
   expect(await m.find({ type: 'Button', key: 'edit' })).toBeUndefined()
   await m.unmount()
   placed = true
+})
+
+test('la vue Modifs montre directement les lignes changées, retirées en rouge avant les ajoutées', async () => {
+  const content = Array.from({ length: 20 }, (_, i) => `l${i + 1}`).join('\n').replace('l10', 'NEW')
+  const change = { old: 'l9\nl10\nl11', new: 'l9\nNEW\nl11' }
+  const rows = inlineRows(content, [change])
+  expect(rows.map(r => r.kind)).toEqual(['gap', 'ctx', 'ctx', 'ctx', 'del', 'add', 'ctx', 'ctx', 'ctx', 'gap'])
+  expect(rows[0]!.text).toBe('⋯ 6 lignes')
+  expect(rows[4]).toEqual({ kind: 'del', text: 'l10' })
+  expect(rows[5]).toEqual({ kind: 'add', num: 10, text: 'NEW' })
+  expect(inlineRows(content, [change], true).length).toBe(21) // fichier entier + la ligne retirée
+  expect(inlineRows(content, [{ old: 'x', new: 'absent' }])).toEqual([]) // remplacée depuis
 })

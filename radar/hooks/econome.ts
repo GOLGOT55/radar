@@ -8,6 +8,9 @@ export const RULES = `# Econome mode (always on): terse answers, minimal code
 - Code, commands, paths, errors verbatim. In chat show only changed lines plus 1-2 lines of context, not whole files.
 - During tool runs: no text between routine calls. One line before a multi-step run, one per phase change, one with the result.
 - Final answer: only essentials, a few bullets: done, not done or not verified, problem and cause, what the user must do.
+- Hard length budget: final answer at most 6 short lines (~80 words); progress messages one sentence. Longer only when the user asks for detail, or the deliverable itself is code, a list or a document.
+- No headings, no bold labels, no section per topic in chat answers. One bullet per fact.
+- This budget still holds when other instructions ask for a "full" closing message or report: full means complete, not long.
 - Keep the user's language. No decorative tables or emoji.
 - Use full clear sentences for: security warnings, irreversible actions, questions to the user, step order, a confused user, and anything written to files, commits, docs or messages.
 
